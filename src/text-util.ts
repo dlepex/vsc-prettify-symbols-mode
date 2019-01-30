@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
+import { trace } from './_debug';
 
 // 'sticky' flag is not yet supported :(
 const lineEndingRE = /([^\r\n]*)(\r\n|\r|\n)?/;
- 
+
 
 export interface RangeDelta {
   start: vscode.Position;
@@ -11,15 +12,15 @@ export interface RangeDelta {
   endCharactersDelta: number; // delta for positions on the same line as the end position
 }
 
-export function offsetAt(text: string, pos: vscode.Position) : number {
+export function offsetAt(text: string, pos: vscode.Position): number {
   let line = pos.line;
   let lastIndex = 0;
   while (line > 0) {
     const match = lineEndingRE.exec(text.substring(lastIndex));
-    if(match[2] === '' || match[2] === undefined) // no line-ending found
+    if (match[2] === '' || match[2] === undefined) // no line-ending found
       return -1; // the position is beyond the length of text
     else {
-      lastIndex+= match[0].length;
+      lastIndex += match[0].length;
       --line;
     }
   }
@@ -33,19 +34,19 @@ export function offsetAt(text: string, pos: vscode.Position) : number {
  * 'acbX\ndef'
  * +++*** --> +++_***
  * */
-export function relativeOffsetAtAbsolutePosition(text: string, textStart: vscode.Position, pos: vscode.Position) : number {
+export function relativeOffsetAtAbsolutePosition(text: string, textStart: vscode.Position, pos: vscode.Position): number {
   let line = textStart.line;
   let currentOffset = 0;
   // count the relative lines and offset w.r.t text
-  while(line < pos.line) {
+  while (line < pos.line) {
     const match = lineEndingRE.exec(text.substring(currentOffset));
     ++line;   // there was a new line
     currentOffset += match[0].length;
   }
 
-  if(line > pos.line)
+  if (line > pos.line)
     return -1
-  else if(textStart.line === pos.line)
+  else if (textStart.line === pos.line)
     return Math.max(-1, pos.character - textStart.character);
   else // if(line === pos.line)
     return Math.max(-1, pos.character + currentOffset);
@@ -54,21 +55,21 @@ export function relativeOffsetAtAbsolutePosition(text: string, textStart: vscode
 /**
  * @returns the Position (line, column) for the location (character position), assuming that text begins at start
  */
-export function positionAtRelative(start: vscode.Position, text: string, offset: number) : vscode.Position {
-  if(offset > text.length)
+export function positionAtRelative(start: vscode.Position, text: string, offset: number): vscode.Position {
+  if (offset > text.length)
     offset = text.length;
   let line = start.line;
   let currentOffset = 0;  // offset into text we are current at; <= `offset`
   let lineOffset = start.character;
   let lastIndex = start.character;
-  while(true) {
+  while (true) {
     const match = lineEndingRE.exec(text.substring(currentOffset));
     // match[0] -- characters plus newline
     // match[1] -- characters up to newline
     // match[2] -- newline (\n, \r, or \r\n)
-    if(!match || match[0].length === 0 || currentOffset + match[1].length >= offset)
+    if (!match || match[0].length === 0 || currentOffset + match[1].length >= offset)
       return new vscode.Position(line, lineOffset + Math.max(offset - currentOffset, 0))
-    currentOffset+= match[0].length;
+    currentOffset += match[0].length;
     lineOffset = 0;
     ++line;
   }
@@ -78,16 +79,16 @@ export function positionAtRelative(start: vscode.Position, text: string, offset:
 /**
  * @returns the Position (line, column) for the location (character position)
  */
-export function positionAt(text: string, offset: number) : vscode.Position {
-  if(offset > text.length)
+export function positionAt(text: string, offset: number): vscode.Position {
+  if (offset > text.length)
     offset = text.length;
   let line = 0;
   let lastIndex = 0;
-  while(true) {
+  while (true) {
     const match = lineEndingRE.exec(text.substring(lastIndex));
-    if(lastIndex + match[1].length >= offset)
+    if (lastIndex + match[1].length >= offset)
       return new vscode.Position(line, Math.max(0, offset - lastIndex))
-    lastIndex+= match[0].length;
+    lastIndex += match[0].length;
     ++line;
   }
 }
@@ -95,41 +96,43 @@ export function positionAt(text: string, offset: number) : vscode.Position {
 /**
  * @returns the lines and characters represented by the text
  */
-export function toRangeDelta(oldRange:vscode.Range, text: string) : RangeDelta {
-  const newEnd = positionAt(text,text.length);
+export function toRangeDelta(oldRange: vscode.Range, text: string): RangeDelta {
+  const newEnd = positionAt(text, text.length);
   let charsDelta;
-  if(oldRange.start.line == oldRange.end.line)
-    charsDelta = newEnd.character - (oldRange.end.character-oldRange.start.character);
-  else
-    charsDelta = newEnd.character - oldRange.end.character;
-  
-  return {
+  if (oldRange.start.line == oldRange.end.line)
+    charsDelta = newEnd.character - (oldRange.end.character - oldRange.start.character);
+  else charsDelta = newEnd.character - oldRange.end.character;
+  const result = {
     start: oldRange.start,
     end: oldRange.end,
-    linesDelta: newEnd.line-(oldRange.end.line-oldRange.start.line),
+    linesDelta: newEnd.line - (oldRange.end.line - oldRange.start.line),
     endCharactersDelta: charsDelta
   };
+  trace("toRangeDelta", text);
+  trace("toRangeDelta.res", result);
+
+  return result
 }
 
-export function rangeDeltaNewRange(delta: RangeDelta) : vscode.Range {
-  let x : number;
-  if (delta.linesDelta > 0) 
+export function rangeDeltaNewRange(delta: RangeDelta): vscode.Range {
+  let x: number;
+  if (delta.linesDelta > 0)
     x = delta.endCharactersDelta;
-  else if (delta.linesDelta < 0 && delta.start.line == delta.end.line + delta.linesDelta) 
+  else if (delta.linesDelta < 0 && delta.start.line == delta.end.line + delta.linesDelta)
     x = delta.end.character + delta.endCharactersDelta + delta.start.character;
   else
     x = delta.end.character + delta.endCharactersDelta;
   return new vscode.Range(delta.start, new vscode.Position(delta.end.line + delta.linesDelta, x));
 }
 
-function positionRangeDeltaTranslate(pos: vscode.Position, delta: RangeDelta) : vscode.Position {
-  if(pos.isBefore(delta.end))
+function positionRangeDeltaTranslate(pos: vscode.Position, delta: RangeDelta): vscode.Position {
+  if (pos.isBefore(delta.end))
     return pos;
   else if (delta.end.line == pos.line) {
     let x = pos.character + delta.endCharactersDelta;
-    if (delta.linesDelta > 0) 
+    if (delta.linesDelta > 0)
       x = x - delta.end.character;
-    else if (delta.start.line == delta.end.line + delta.linesDelta && delta.linesDelta < 0) 
+    else if (delta.start.line == delta.end.line + delta.linesDelta && delta.linesDelta < 0)
       x = x + delta.start.character;
     return new vscode.Position(pos.line + delta.linesDelta, x);
   }
@@ -137,14 +140,14 @@ function positionRangeDeltaTranslate(pos: vscode.Position, delta: RangeDelta) : 
     return new vscode.Position(pos.line + delta.linesDelta, pos.character);
 }
 
-function positionRangeDeltaTranslateEnd(pos: vscode.Position, delta: RangeDelta) : vscode.Position {
-  if(pos.isBeforeOrEqual(delta.end))
+function positionRangeDeltaTranslateEnd(pos: vscode.Position, delta: RangeDelta): vscode.Position {
+  if (pos.isBeforeOrEqual(delta.end))
     return pos;
   else if (delta.end.line == pos.line) {
     let x = pos.character + delta.endCharactersDelta;
-    if (delta.linesDelta > 0) 
+    if (delta.linesDelta > 0)
       x = x - delta.end.character;
-    else if (delta.start.line == delta.end.line + delta.linesDelta && delta.linesDelta < 0) 
+    else if (delta.start.line == delta.end.line + delta.linesDelta && delta.linesDelta < 0)
       x = x + delta.start.character;
     return new vscode.Position(pos.line + delta.linesDelta, x);
   }
@@ -159,18 +162,18 @@ export function rangeTranslate(range: vscode.Range, delta: RangeDelta) {
   )
 }
 
-export function rangeContains(range: vscode.Range, pos: vscode.Position, exclStart=false, inclEnd=false) {
+export function rangeContains(range: vscode.Range, pos: vscode.Position, exclStart = false, inclEnd = false) {
   return range.start.isBeforeOrEqual(pos)
     && (!exclStart || !range.start.isEqual(pos))
-    && ((inclEnd &&  range.end.isEqual(pos)) || range.end.isAfter(pos));
+    && ((inclEnd && range.end.isEqual(pos)) || range.end.isAfter(pos));
 }
 
 export function maxPosition(x: vscode.Position, y: vscode.Position) {
-  if(x.line < y.line)
+  if (x.line < y.line)
     return x;
-  if(x.line < x.line)
+  if (x.line < x.line)
     return y;
-  if(x.character < y.character)
+  if (x.character < y.character)
     return x;
   else
     return y;

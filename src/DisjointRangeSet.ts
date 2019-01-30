@@ -7,103 +7,103 @@ import * as textUtil from './text-util';
 /// Inserting a range fails if it overlaps another range
 export class DisjointRangeSet {
   // ranges, sorted by starting position; nonoverlapping
-  private ranges : vscode.Range[];
+  private ranges: vscode.Range[];
 
   constructor() {
     this.ranges = [];
   }
 
-  private static makeFromSortedRanges(ranges:vscode.Range[]) : DisjointRangeSet {
+  private static makeFromSortedRanges(ranges: vscode.Range[]): DisjointRangeSet {
     const result = new DisjointRangeSet();
     result.ranges = ranges;
     return result;
   }
 
-  public getStart() : vscode.Position {
-    if(this.ranges.length > 0)
+  public getStart(): vscode.Position {
+    if (this.ranges.length > 0)
       return this.ranges[0].start;
     else
-      return new vscode.Position(0,0);
+      return new vscode.Position(0, 0);
   }
 
-  public getEnd() : vscode.Position {
-    if(this.ranges.length > 0)
-      return this.ranges[this.ranges.length-1].end;
+  public getEnd(): vscode.Position {
+    if (this.ranges.length > 0)
+      return this.ranges[this.ranges.length - 1].end;
     else
-      return new vscode.Position(0,0);
+      return new vscode.Position(0, 0);
   }
 
   public getTotalRange() {
-    if(this.ranges.length > 0)
-      return new vscode.Range(this.ranges[0].start,this.ranges[this.ranges.length-1].end);
+    if (this.ranges.length > 0)
+      return new vscode.Range(this.ranges[0].start, this.ranges[this.ranges.length - 1].end);
     else
-      return new vscode.Range(0,0,0,0);
+      return new vscode.Range(0, 0, 0, 0);
   }
 
-  public isEmpty() : boolean {
+  public isEmpty(): boolean {
     return this.ranges.length == 0;
   }
 
-  public isEmptyRange() : boolean {
-    return this.ranges.length == 0 || this.ranges[0].start.isEqual(this.ranges[this.ranges.length-1].end);
+  public isEmptyRange(): boolean {
+    return this.ranges.length == 0 || this.ranges[0].start.isEqual(this.ranges[this.ranges.length - 1].end);
   }
 
   /// assumes that the ranges in newRanges are not interspersed with this
   /// this assumption can be made if the overlapping range had been previously removed
-  public insertRanges(newRanges: DisjointRangeSet) : boolean {
+  public insertRanges(newRanges: DisjointRangeSet): boolean {
     const totalRange = newRanges.getTotalRange()
     const insertionIdx = this.findIndex(totalRange.start);
     const next = this.ranges[insertionIdx];
-    if(next && totalRange.end.isAfter(next.start))
+    if (next && totalRange.end.isAfter(next.start))
       return false;
     // not overlapping!
-    this.ranges.splice.apply(this.ranges,(<any[]>[insertionIdx, 0]).concat(newRanges.ranges));
+    this.ranges.splice.apply(this.ranges, (<any[]>[insertionIdx, 0]).concat(newRanges.ranges));
   }
 
- /**
- * @returns `true` on success: if there was no overlap
- */
-  public insert(range: vscode.Range) : boolean {
+  /**
+  * @returns `true` on success: if there was no overlap
+  */
+  public insert(range: vscode.Range): boolean {
     const insertionIdx = this.findIndex(range.start);
     const next = this.ranges[insertionIdx];
-    if(next && range.end.isAfter(next.start))
+    if (next && range.end.isAfter(next.start))
       return false;
     // not overlapping!
     this.ranges.splice(insertionIdx, 0, range);
     return true;
   }
 
-  public isOverlapping(range: vscode.Range) : boolean {
+  public isOverlapping(range: vscode.Range): boolean {
     const insertionIdx = this.findIndex(range.start);
     const next = this.ranges[insertionIdx];
-    if(next && range.end.isAfter(next.start))
+    if (next && range.end.isAfter(next.start))
       return true;
     return false;
   }
 
   // remove all ranges that overlap the given range
-  public removeOverlapping(range: vscode.Range, options: {includeTouchingStart?:boolean,includeTouchingEnd?:boolean} = {includeTouchingStart:false,includeTouchingEnd:false}) : vscode.Range[] {
+  public removeOverlapping(range: vscode.Range, options: { includeTouchingStart?: boolean, includeTouchingEnd?: boolean } = { includeTouchingStart: false, includeTouchingEnd: false }): vscode.Range[] {
     const inclStart = options.includeTouchingStart || false;
     const inclEnd = options.includeTouchingEnd || false;
     let begin = this.findIndex(range.start);
-    if(inclStart && begin > 0 && this.ranges[begin-1].end.isEqual(range.start))
+    if (inclStart && begin > 0 && this.ranges[begin - 1].end.isEqual(range.start))
       --begin;
     let end = begin;
-    while(end < this.ranges.length && this.ranges[end].start.isBefore(range.end))
+    while (end < this.ranges.length && this.ranges[end].start.isBefore(range.end))
       ++end;
-    if(inclEnd && end < this.ranges.length && this.ranges[end].start.isEqual(range.end))
+    if (inclEnd && end < this.ranges.length && this.ranges[end].start.isEqual(range.end))
       ++end;
     // else if(inclEnd && end < this.ranges.length-1 && this.ranges[end+1].start.isEqual(range.end))
     //   ++end;
-    return this.ranges.splice(begin, end-begin);
+    return this.ranges.splice(begin, end - begin);
   }
 
   // remove the given ranges (only considers equal ranges; not simply overlapping)
-  public subtractRanges(ranges: DisjointRangeSet) : DisjointRangeSet {
+  public subtractRanges(ranges: DisjointRangeSet): DisjointRangeSet {
     let idx1 = 0;
     const newRanges = this.ranges.filter((r) => {
       let idx = ranges.ranges.indexOf(r, idx1);
-      if(idx != -1) {
+      if (idx != -1) {
         idx1 = idx; // take advantage of the fact the ranges are sorted
         return false; // discard
       }
@@ -114,15 +114,15 @@ export class DisjointRangeSet {
   }
 
   private validateFoundIndex(idx: number, pos: vscode.Position, exclStart: boolean, inclEnd: boolean) {
-    if(idx > this.ranges.length || idx < 0)
+    if (idx > this.ranges.length || idx < 0)
       throw "idx is out of range: idx > this.ranges.length || idx < 0";
-    else if(this.ranges.length == 0)
+    else if (this.ranges.length == 0)
       return;
-    else if(idx < this.ranges.length && !textUtil.rangeContains(this.ranges[idx],pos,exclStart,inclEnd) && this.ranges[idx].start.isBefore(pos))
+    else if (idx < this.ranges.length && !textUtil.rangeContains(this.ranges[idx], pos, exclStart, inclEnd) && this.ranges[idx].start.isBefore(pos))
       throw "idx is too big; range comes before pos";
-    else if(idx > 0 && this.ranges[idx-1].end.isAfter(pos))
+    else if (idx > 0 && this.ranges[idx - 1].end.isAfter(pos))
       throw "idx is too big; previous element comes after pos";
-    else if(idx < this.ranges.length-1 && this.ranges[idx+1].start.isBefore(pos) && (!inclEnd || !this.ranges[idx].end.isEqual(pos)))
+    else if (idx < this.ranges.length - 1 && this.ranges[idx + 1].start.isBefore(pos) && (!inclEnd || !this.ranges[idx].end.isEqual(pos)))
       throw "idx is too small; next element comes before pos";
   }
 
@@ -130,31 +130,31 @@ export class DisjointRangeSet {
   /** returns the index of the range that starts at or after the given position
    * if pos is after all range-starts, then this returns this.ranges.length
    */
-  private findIndex(pos: vscode.Position, options: {excludeStart?: boolean, includeEnd?: boolean} = {excludeStart: false, includeEnd: false}) {
+  private findIndex(pos: vscode.Position, options: { excludeStart?: boolean, includeEnd?: boolean } = { excludeStart: false, includeEnd: false }) {
     const exclStart = options.excludeStart || false;
     const inclEnd = options.includeEnd || false;
 
     let begin = 0;
     let end = this.ranges.length;
-    if(this.ranges.length == 0)
+    if (this.ranges.length == 0)
       return 0;
-    if(this.ranges[this.ranges.length-1].end.isBeforeOrEqual(pos) && (!inclEnd || !this.ranges[this.ranges.length-1].end.isEqual(pos)))
+    if (this.ranges[this.ranges.length - 1].end.isBeforeOrEqual(pos) && (!inclEnd || !this.ranges[this.ranges.length - 1].end.isEqual(pos)))
       return this.ranges.length;
 
     // binary search
-    let idx = Math.floor((begin + end)/2);
-    while(begin < end) {
+    let idx = Math.floor((begin + end) / 2);
+    while (begin < end) {
       const range = this.ranges[idx];
-      if(textUtil.rangeContains(range,pos,exclStart,inclEnd))
+      if (textUtil.rangeContains(range, pos, exclStart, inclEnd))
         break; // we've found a match
-      else if(pos.isBefore(range.start) || (exclStart && pos.isEqual(range.start)))
+      else if (pos.isBefore(range.start) || (exclStart && pos.isEqual(range.start)))
         end = idx;
       else // pos.isAfterOrEqual(range.end)
-        begin = idx+1;
-      idx = Math.floor((begin + end)/2);
+        begin = idx + 1;
+      idx = Math.floor((begin + end) / 2);
     }
 
-    this.validateFoundIndex(idx,pos,exclStart,inclEnd);
+    this.validateFoundIndex(idx, pos, exclStart, inclEnd);
     return idx;
 
     // if(begin < end) {
@@ -204,23 +204,23 @@ export class DisjointRangeSet {
   // }
 
   /** returns the range that contains pos, or else undefined */
-  public find(pos: vscode.Position, options: {excludeStart?: boolean, includeEnd?: boolean} = {excludeStart: false, includeEnd: false}) : vscode.Range {
+  public find(pos: vscode.Position, options: { excludeStart?: boolean, includeEnd?: boolean } = { excludeStart: false, includeEnd: false }): vscode.Range {
     const idx = this.findIndex(pos, options);
     const match = this.ranges[idx];
-    if(match && textUtil.rangeContains(match,pos,options.excludeStart,options.includeEnd))
+    if (match && textUtil.rangeContains(match, pos, options.excludeStart, options.includeEnd))
       return match;
     else
       return undefined;
   }
 
-  public findPreceding(pos: vscode.Position) : vscode.Range {
+  public findPreceding(pos: vscode.Position): vscode.Range {
     const idx = this.findIndex(pos);
-    const match = this.ranges[idx-1];
+    const match = this.ranges[idx - 1];
     return match;
   }
 
-  public *getRangesStartingAt(pos: vscode.Position) : IterableIterator<vscode.Range> {
-    for(let idx = this.findIndex(pos); idx < this.ranges.length; ++idx)
+  public *getRangesStartingAt(pos: vscode.Position): IterableIterator<vscode.Range> {
+    for (let idx = this.findIndex(pos); idx < this.ranges.length; ++idx)
       yield this.ranges[idx];
   }
 
@@ -293,78 +293,78 @@ export class DisjointRangeSet {
   //   }
   // }
 
-  public shiftRangeDelta(delta: textUtil.RangeDelta) : vscode.Range {
-    if(this.ranges.length == 0 || (delta.linesDelta == 0 && delta.endCharactersDelta == 0))
+  public shiftRangeDelta(delta: textUtil.RangeDelta): vscode.Range {
+    if (this.ranges.length == 0 || (delta.linesDelta == 0 && delta.endCharactersDelta == 0))
       return new vscode.Range(delta.start, delta.end);
 
     let firstIdx = this.findIndex(delta.start);
-    let idx = firstIdx;    
+    let idx = firstIdx;
 
-    if(delta.linesDelta != 0) {
+    if (delta.linesDelta != 0) {
       // shift all remaining lines
-      for( ; idx < this.ranges.length; ++idx)
+      for (; idx < this.ranges.length; ++idx)
         this.ranges[idx] = textUtil.rangeTranslate(this.ranges[idx], delta);
     } else {
       // shift everything overlapping on the same end line
-      for( ; idx < this.ranges.length && this.ranges[idx].start.line <= delta.end.line; ++idx) {
+      for (; idx < this.ranges.length && this.ranges[idx].start.line <= delta.end.line; ++idx) {
         this.ranges[idx] = textUtil.rangeTranslate(this.ranges[idx], delta);
       }
     }
 
     // not firstIdx <= idx <= this.ranges.length
-    if(firstIdx == idx)
-      return new vscode.Range(0,0,0,0);
-    else if(idx == this.ranges.length)
-      return new vscode.Range(this.ranges[firstIdx].start, this.ranges[idx-1].end);
+    if (firstIdx == idx)
+      return new vscode.Range(0, 0, 0, 0);
+    else if (idx == this.ranges.length)
+      return new vscode.Range(this.ranges[firstIdx].start, this.ranges[idx - 1].end);
     else
-      return new vscode.Range(this.ranges[firstIdx].start, this.ranges[idx-1].end);
+      return new vscode.Range(this.ranges[firstIdx].start, this.ranges[idx - 1].end);
   }
 
-  public shiftTextChange(target: vscode.Range, text: string) : vscode.Range {
+  public shiftTextChange(target: vscode.Range, text: string): vscode.Range {
     return this.shiftRangeDelta(textUtil.toRangeDelta(target, text));
   }
 
-  public getOverlapRanges(range: vscode.Range) : vscode.Range[] {
+  public getOverlapRanges(range: vscode.Range): vscode.Range[] {
     const begin = this.findIndex(range.start);
     const end = this.findIndex(range.end);
-    return this.ranges.slice(begin,end);
+    return this.ranges.slice(begin, end);
   }
 
-  public getOverlap(range: vscode.Range, options: {excludeStart?: boolean, includeEnd?: boolean} = {excludeStart: false, includeEnd: false}) : DisjointRangeSet {
-    const begin = this.findIndex(range.start, {excludeStart: options.excludeStart,includeEnd: range.isEmpty});
-    let end = this.findIndex(range.end, {excludeStart: true, includeEnd: options.includeEnd});
-    if(end < this.ranges.length && textUtil.rangeContains(this.ranges[end],range.end,!range.isEmpty,options.includeEnd))
+  public getOverlap(range: vscode.Range, options: { excludeStart?: boolean, includeEnd?: boolean } = { excludeStart: false, includeEnd: false }): DisjointRangeSet {
+    const begin = this.findIndex(range.start, { excludeStart: options.excludeStart, includeEnd: range.isEmpty });
+    let end = this.findIndex(range.end, { excludeStart: true, includeEnd: options.includeEnd });
+    if (end < this.ranges.length && textUtil.rangeContains(this.ranges[end], range.end, !range.isEmpty, options.includeEnd))
       ++end;
-    return DisjointRangeSet.makeFromSortedRanges(this.ranges.slice(begin,end));
+    return DisjointRangeSet.makeFromSortedRanges(this.ranges.slice(begin, end));
   }
 
   /// shifts the line positions of ranges
   /// returns false if this operation failed because there is an overlapping
   /// range or if removing lines introduces an overlap
-//   public shiftLines(pos: vscode.Position, deltaLines: number) : boolean {
-//     if(this.ranges.length == 0 || deltaLines==0)
-//       return true;
+  //   public shiftLines(pos: vscode.Position, deltaLines: number) : boolean {
+  //     if(this.ranges.length == 0 || deltaLines==0)
+  //       return true;
 
-//     const idx = this.findIndex(pos);
+  //     const idx = this.findIndex(pos);
 
-//     if(idx >= this.ranges.length)
-//       return true;
-//     if(this.ranges[idx].contains(pos))
-//       return false; // overlapping conflict!
+  //     if(idx >= this.ranges.length)
+  //       return true;
+  //     if(this.ranges[idx].contains(pos))
+  //       return false; // overlapping conflict!
 
-//     const prev = this.ranges[idx-1]; // may be undefined
-//     const next = this.ranges[idx]; // exists
+  //     const prev = this.ranges[idx-1]; // may be undefined
+  //     const next = this.ranges[idx]; // exists
 
-//     if(next.start.line+deltaLines < 0)
-//       return false;
-//     if(prev && prev.end.isAfter(next.start.translate(deltaLines,0)))
-//       return false;
+  //     if(next.start.line+deltaLines < 0)
+  //       return false;
+  //     if(prev && prev.end.isAfter(next.start.translate(deltaLines,0)))
+  //       return false;
 
-//     // shift the ranges after pos
-//     while (idx < this.ranges.length) {
-//       const range = this.ranges[idx];
-//       this.ranges[idx] = new vscode.Range(range.start.translate(deltaLines,0),range.end.translate(deltaLines,0))
-//     }
-//     return true;
-//   }
+  //     // shift the ranges after pos
+  //     while (idx < this.ranges.length) {
+  //       const range = this.ranges[idx];
+  //       this.ranges[idx] = new vscode.Range(range.start.translate(deltaLines,0),range.end.translate(deltaLines,0))
+  //     }
+  //     return true;
+  //   }
 }

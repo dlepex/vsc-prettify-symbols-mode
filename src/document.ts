@@ -1,27 +1,28 @@
 import * as vscode from 'vscode';
 import * as copyPaste from 'copy-paste';
 
-import {Substitution, UglyRevelation, LanguageEntry, PrettyCursor, PrettyStyleProperties, PrettyStyle, assignStyleProperties, HideTextMethod} from './configuration';
+import { Substitution, UglyRevelation, LanguageEntry, PrettyCursor, PrettyStyleProperties, PrettyStyle, assignStyleProperties, HideTextMethod } from './configuration';
 import * as pos from './position';
-import {RangeSet} from './RangeSet';
-import {DisjointRangeSet} from './DisjointRangeSet';
+import { RangeSet } from './RangeSet';
+import { DisjointRangeSet } from './DisjointRangeSet';
 import * as drangeset from './DisjointRangeSet';
 import * as textUtil from './text-util';
 import * as tm from './text-mate';
-import {MatchResult, iterateMatches, iterateMatchArray, mapIterator} from './regexp-iteration';
+import { MatchResult, iterateMatches, iterateMatchArray, mapIterator } from './regexp-iteration';
 import * as decorations from './decorations';
-import {PrettyModel, UpdateDecorationEntry, UpdateDecorationInstanceEntry} from './PrettyModel';
+import { PrettyModel, UpdateDecorationEntry, UpdateDecorationInstanceEntry } from './PrettyModel';
+import { trace } from './_debug';
 
 const debugging = false;
 const activeEditorDecorationTimeout = 100;
 const updateSelectionTimeout = 20;
 const inactiveEditorDecorationTimeout = 500;
 
-function arrayEqual<T>(a1: T[], a2: T[], isEqual: (x:T,y:T)=>boolean = ((x,y) => x===y)) : boolean {
-  if(a1.length!=a2.length)
+function arrayEqual<T>(a1: T[], a2: T[], isEqual: (x: T, y: T) => boolean = ((x, y) => x === y)): boolean {
+  if (a1.length != a2.length)
     return false;
-  for(let idx = 0; idx < a1.length; ++idx) {
-    if(!isEqual(a1[idx],a2[idx]))
+  for (let idx = 0; idx < a1.length; ++idx) {
+    if (!isEqual(a1[idx], a2[idx]))
       return false;
   }
   return true;
@@ -30,9 +31,9 @@ function arrayEqual<T>(a1: T[], a2: T[], isEqual: (x:T,y:T)=>boolean = ((x,y) =>
 class DebounceFunction implements vscode.Disposable {
   private timer?: NodeJS.Timer = null;
   private callback?: () => void = null;
-  constructor(private timeout: number) {}
+  constructor(private timeout: number) { }
   public dispose() {
-    if(this.timer != null) {
+    if (this.timer != null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
@@ -50,28 +51,28 @@ class DebounceFunction implements vscode.Disposable {
 }
 
 export class PrettyDocumentController implements vscode.Disposable {
-  private readonly model : PrettyModel;
-  private readonly subscriptions : vscode.Disposable[] = [];
-  private currentDecorations : UpdateDecorationEntry[] = [];
+  private readonly model: PrettyModel;
+  private readonly subscriptions: vscode.Disposable[] = [];
+  private currentDecorations: UpdateDecorationEntry[] = [];
   private updateActiveEditor = new DebounceFunction(activeEditorDecorationTimeout);
   private updateInactiveEditors = new DebounceFunction(inactiveEditorDecorationTimeout);
   private updateSelection = new DebounceFunction(updateSelectionTimeout);
 
-  public constructor(doc: vscode.TextDocument, settings: LanguageEntry, options: {hideTextMethod: HideTextMethod, textMateGrammar?: tm.IGrammar|null},
+  public constructor(doc: vscode.TextDocument, settings: LanguageEntry, options: { hideTextMethod: HideTextMethod, textMateGrammar?: tm.IGrammar | null },
     private document = doc,
     private adjustCursorMovement = settings.adjustCursorMovement,
   ) {
     const docModel = {
-      getText: (r?:vscode.Range) => this.document.getText(r),
-      getLine: (n:number) => this.document.lineAt(n).text,
-      getLineRange: (n:number) => this.document.lineAt(n).range,
+      getText: (r?: vscode.Range) => this.document.getText(r),
+      getLine: (n: number) => this.document.lineAt(n).text,
+      getLineRange: (n: number) => this.document.lineAt(n).range,
       getLineCount: () => this.document.lineCount,
       validateRange: (r: vscode.Range) => this.document.validateRange(r),
     }
-    this.model = new PrettyModel(docModel,settings,options);
+    this.model = new PrettyModel(docModel, settings, options);
 
     this.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e) => {
-      if(e.document == this.document)
+      if (e.document == this.document)
         this.onChangeDocument(e);
     }));
 
@@ -94,12 +95,12 @@ export class PrettyDocumentController implements vscode.Disposable {
     this.applyDecorations(this.getEditors(), this.currentDecorations);
   }
 
-  public copyDecorated(editor: vscode.TextEditor) : Promise<void> {
+  public copyDecorated(editor: vscode.TextEditor): Promise<void> {
     function doCopy(x: any) {
       return new Promise<void>((resolve, reject) => copyPaste.copy(x, (err) => err ? reject(err) : resolve()));
     }
     const copy = editor.selections.map(sel => this.model.getDecoratedText(sel));
-    if(copy.length === 0)
+    if (copy.length === 0)
       return Promise.resolve();
     else
       return doCopy(copy.join('\n'))
@@ -111,9 +112,10 @@ export class PrettyDocumentController implements vscode.Disposable {
     revealRanges?: vscode.Range[],
     prettyCursors?: UpdateDecorationInstanceEntry,
   ): void {
+    trace("applyActiveEditorDecorations", decs, revealRanges);
     this.updateActiveEditor.call(() => {
       try {
-        for(const editor of editors) {
+        for (const editor of editors) {
           const cursors = prettyCursors
             || this.model.renderPrettyCursor(editor.selections);
           // Which ranges should *not* be prettified?
@@ -134,7 +136,7 @@ export class PrettyDocumentController implements vscode.Disposable {
               }))
           ));
         }
-      } catch(err) {
+      } catch (err) {
         console.error(err)
       }
     });
@@ -146,12 +148,12 @@ export class PrettyDocumentController implements vscode.Disposable {
   ): void {
     this.updateInactiveEditors.call(() => {
       try {
-        for(const editor of editors) {
-          if(editor === vscode.window.activeTextEditor)
+        for (const editor of editors) {
+          if (editor === vscode.window.activeTextEditor)
             continue;
           decs.forEach(d => editor.setDecorations(d.decoration, d.ranges));
-        }	
-      } catch(err) {
+        }
+      } catch (err) {
         console.error(err)
       }
     });
@@ -164,7 +166,7 @@ export class PrettyDocumentController implements vscode.Disposable {
   }
 
   private onChangeDocument(event: vscode.TextDocumentChangeEvent) {
-    if(this.model.applyChanges(event.contentChanges))
+    if (this.model.applyChanges(event.contentChanges))
       this.applyDecorations(this.getEditors(), this.model.getDecorationsList())
   }
 
@@ -174,40 +176,40 @@ export class PrettyDocumentController implements vscode.Disposable {
   }
 
   private lastSelections = new Map<vscode.TextEditor, vscode.Selection[]>();
-  public adjustCursor(editor: vscode.TextEditor): null|vscode.Selection[] {
+  public adjustCursor(editor: vscode.TextEditor): null | vscode.Selection[] {
     let updated = false;
-    let adjustedSelections : vscode.Selection[] = [];
+    let adjustedSelections: vscode.Selection[] = [];
     let before = this.lastSelections.get(editor);
-    if(!before) {
-      this.lastSelections.set(editor,editor.selections);
+    if (!before) {
+      this.lastSelections.set(editor, editor.selections);
       return editor.selections;
     }
     const after = editor.selections;
-    if(arrayEqual(before,after))
+    if (arrayEqual(before, after))
       return null;
 
-    after.forEach((sel,idx) => {
-      if(before[idx] === undefined) {
-        adjustedSelections.push(new vscode.Selection(sel.anchor,sel.active));
+    after.forEach((sel, idx) => {
+      if (before[idx] === undefined) {
+        adjustedSelections.push(new vscode.Selection(sel.anchor, sel.active));
         return;
       }
-      const adjusted = pos.adjustCursorMovement(before[idx].active,sel.active,this.document,this.model.getPrettySubstitutionsRanges());
-      if(!adjusted.pos.isEqual(sel.active)) {
+      const adjusted = pos.adjustCursorMovement(before[idx].active, sel.active, this.document, this.model.getPrettySubstitutionsRanges());
+      if (!adjusted.pos.isEqual(sel.active)) {
         updated = true;
       }
 
       // if anchor==active, then adjust both; otherwise just adjust the active position
-      if(sel.anchor.isEqual(sel.active))
-        adjustedSelections.push(new vscode.Selection(adjusted.pos,adjusted.pos));
+      if (sel.anchor.isEqual(sel.active))
+        adjustedSelections.push(new vscode.Selection(adjusted.pos, adjusted.pos));
       else
-        adjustedSelections.push(new vscode.Selection(sel.anchor,adjusted.pos));
+        adjustedSelections.push(new vscode.Selection(sel.anchor, adjusted.pos));
     });
 
-    this.lastSelections.set(editor,adjustedSelections);
+    this.lastSelections.set(editor, adjustedSelections);
 
     // could cause this method to be called again, but since we've set the
     // last-selection to adjustedSelections, we will immediately return. 
-    if(updated)
+    if (updated)
       editor.selections = adjustedSelections;
 
     return adjustedSelections;
@@ -223,13 +225,13 @@ export class PrettyDocumentController implements vscode.Disposable {
    */
   public selectionChanged(editor: vscode.TextEditor) {
     this.updateSelection.call(() => {
-      let selections: null|vscode.Selection[];
-      if(this.adjustCursorMovement) {
+      let selections: null | vscode.Selection[];
+      if (this.adjustCursorMovement) {
         selections = this.adjustCursor(editor);
       } else {
         selections = editor.selections;
       }
-      if(selections == null) {
+      if (selections == null) {
         return;
       }
 
@@ -237,7 +239,7 @@ export class PrettyDocumentController implements vscode.Disposable {
       const cR = cursors == null ? [] : cursors.ranges.getRanges();
       const revealed = this.model.revealSelections(selections);
       if (!arrayEqual(revealed.ranges, this.revealedRanges)
-      || !arrayEqual(cR, this.cursorRanges)) {
+        || !arrayEqual(cR, this.cursorRanges)) {
         this.applyActiveEditorDecorations(
           [editor],
           this.model.getDecorationsList(),
